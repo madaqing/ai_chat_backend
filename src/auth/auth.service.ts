@@ -34,10 +34,17 @@ export class AuthService {
       },
     });
 
-    const token = this.jwtService.sign({
-      sub: user.id,
-      email: user.email,
-    });
+    // 生成 accessToken（短有效期）
+    const token = this.jwtService.sign(
+      { sub: user.id, email: user.email },
+      { expiresIn: '30m' }, // accessToken 30分钟
+    );
+
+    // 生成 refreshToken（长有效期）
+    const refreshToken = this.jwtService.sign(
+      { sub: user.id },
+      { expiresIn: '7d' }, // 7天
+    );
 
     return {
       user: {
@@ -46,6 +53,7 @@ export class AuthService {
         email: user.email,
       },
       token,
+      refreshToken,
     };
   }
 
@@ -66,10 +74,17 @@ export class AuthService {
       throw new HttpException('密码错误', HttpStatus.UNAUTHORIZED);
     }
 
-    const token = this.jwtService.sign({
-      sub: user.id,
-      email: user.email,
-    });
+    // 生成 accessToken
+    const token = this.jwtService.sign(
+      { sub: user.id, email: user.email },
+      { expiresIn: '2s' },
+    );
+
+    // 生成 refreshToken
+    const refreshToken = this.jwtService.sign(
+      { sub: user.id },
+      { expiresIn: '7d' },
+    );
 
     return {
       user: {
@@ -78,6 +93,52 @@ export class AuthService {
         email: user.email,
       },
       token,
+      refreshToken,
     };
+  }
+
+  async refreshToken(refreshToken: string) {
+    try {
+      // 1. 验证 refreshToken 是否合法
+      const payload = this.jwtService.verify(refreshToken);
+
+      // 2. 根据用户ID查用户是否存在
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+      });
+
+      if (!user) {
+        throw new HttpException('用户不存在', HttpStatus.UNAUTHORIZED);
+      }
+
+      // 3. 生成新的 token
+      const newToken = this.jwtService.sign(
+        { sub: user.id, email: user.email },
+        { expiresIn: '30m' },
+      );
+
+      // 4. 生成新的 refreshToken
+      const newRefreshToken = this.jwtService.sign(
+        { sub: user.id },
+        { expiresIn: '7d' },
+      );
+
+      // 5. 返回新令牌
+      return {
+        token: newToken,
+        refreshToken: newRefreshToken,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+        },
+      };
+    } catch (err) {
+      console.error('刷新令牌失败:', err);
+      throw new HttpException(
+        '登录已过期，请重新登录',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
   }
 }

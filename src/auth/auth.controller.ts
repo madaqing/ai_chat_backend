@@ -38,4 +38,17 @@ export class AuthController {
       );
     }
   }
+
+  @Post('refresh')
+  @Post('refresh')
+  async refresh(@Body() _body: Record<string, any>) {
+    try {
+      return await this.authService.refreshToken(_body.refreshToken);
+    } catch (error: any) {
+      throw new HttpException(
+        error.message || '登录已过期，请重新登录',
+        error.status || HttpStatus.UNAUTHORIZED,
+      );
+    }
+  }
 }
